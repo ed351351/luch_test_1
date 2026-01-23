@@ -4584,9 +4584,9 @@
       blueNoiseResolution: [256, 256],
       motion: {
         pointerLerp: 0.1,
-        waveLerp: 0.03,
-        shatterLerp: 0.05,
-        rayLerp: 0.05,
+        waveLerp: -1,
+        shatterLerp: 0.005,
+        rayLerp: 0.005,
         shatterRange: 0.15,
       },
       background: {
