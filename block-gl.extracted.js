@@ -4564,8 +4564,6 @@
     }
   }
   void 0;
-  const Ps = 0.5,
-    Cs = "ontouchstart" in window || navigator.msMaxTouchPoints > 0;
   function Ls(t) {
     var e;
     return (
@@ -4580,33 +4578,31 @@
   }
   const Rs =
       "\n    #version 300 es\n    precision highp float;\n    in vec3 position;\n    in vec2 uv;\n    uniform mat4 uMVMatrix;\n    uniform mat4 uPMatrix;\n    out vec2 vUv;\n    void main(void) {\n        vUv = uv;\n        gl_Position = uPMatrix * uMVMatrix * vec4( position, 1.0 );\n    }\n",
-    ks = {
-      useFastBokeh: !0,
-      useBokeh: !0,
-      useVignette: !0,
-      useSine: !0,
-      useShatter: !0,
-      resolution: [window.innerWidth * Ps, window.innerHeight * Ps],
-      samplingMethod: 1,
-      blueNoiseSamplingMethod: 5,
-      useGammaCorrection: !1,
+    SETTINGS = {
+      resolutionScale: 0.5,
+      useImageBitmap: false,
       blueNoiseResolution: [256, 256],
+      motion: {
+        pointerLerp: 0.1,
+        waveLerp: 0.03,
+        shatterLerp: 0.05,
+        rayLerp: 0.05,
+        shatterRange: 0.15,
+      },
       background: {
-        color: "#fffbe2",
-        color2: "#ff0000",
-        gradientPos: [0.88, 1.12],
+        color: "#fff9b2",
+        color2: "#ffcc00",
+        gradientPos: [0.08, 0.12],
         gradientPower: 0.5,
       },
       vignette: {
-        color: "#ece403",
+        color: "#ffd900",
         radius: 0.55,
         falloff: 1,
         displace: 0,
         mix: 3,
         angle: 0,
         skew: 0.54,
-        positionX: 0.03,
-        positionY: 0.38,
       },
       sine: {
         frequency: 0.35,
@@ -4614,22 +4610,21 @@
         falloff: 0.5,
         rotation: 0,
         phase: 0,
-        speed: 0.1,
+        speed: 0.7,
         mixRadius: 1,
-        trackMouse: 0,
+        trackMouse: 1,
       },
       shatter: {
-        pos: [3.1, 3.1],
         scale: 0.9,
         amount: 1.3,
         angle: -30,
         radius: 1,
         skew: 1.0,
         mixRadius: 1,
-        mixRadiusInvert: 0,
+        easing: 0,
       },
-      bokeh: { mixRadius: 1, trackMouse: 0, radius: 0.03, tilt: 0.9 },
-      output: { color: "#fffcd8" },
+      bokeh: { mixRadius: 1, radius: 0.03, tilt: 0.9 },
+      output: { color: "#fcffe8" },
     };
   customElements.define(
     "block-gl",
@@ -4646,6 +4641,10 @@
         this.viewport = ke.create();
         this.elapsed = 0;
         this.pointer = [0, 0];
+        this.resolution = [
+          window.innerWidth * SETTINGS.resolutionScale,
+          window.innerHeight * SETTINGS.resolutionScale,
+        ];
         this.uniforms = {};
         this.defines = {};
         this.siteSettingsMotionChange =
@@ -4654,20 +4653,20 @@
         this.currBackgroundColor = [0, 0, 0];
         this.currBackgroundColor2 = [0, 0, 0];
         this.currOutputColor = [0, 0, 0];
-        this.currShatterAngle = ks.shatter.angle / 360;
+        this.currShatterAngle = SETTINGS.shatter.angle / 360;
+        this.currRayRotation = 0;
+        this.currSinePointer = ke.fromValues(0.5, 0.5);
       }
 
       resize() {
-        const width = window.innerWidth * Ps;
-        const height = window.innerHeight * Ps;
+        const width = window.innerWidth * SETTINGS.resolutionScale;
+        const height = window.innerHeight * SETTINGS.resolutionScale;
 
         if (!this.$canvas) return;
 
         this.renderer?.setPixelRatio(1);
         this.renderer?.resize(width, height);
         this.resolution = [width, height];
-        ks.resolution[0] = width;
-        ks.resolution[1] = height;
         this.bufferRead?.resize(width, height);
         this.bufferWrite?.resize(width, height);
         this.backgroundBuffer?.resize(width, height);
@@ -4698,16 +4697,18 @@
         if (this.hasAttribute("force-center")) this.forceCenter = true;
 
         this.vignetteColor = Ls(
-          this.getAttribute("data-vignette-color") || ks.vignette.color,
+          this.getAttribute("data-vignette-color") || SETTINGS.vignette.color,
         );
         this.backgroundColor = Ls(
-          this.getAttribute("data-background-color") || ks.background.color,
+          this.getAttribute("data-background-color") ||
+            SETTINGS.background.color,
         );
         this.backgroundColor2 = Ls(
-          this.getAttribute("data-background-color-2") || ks.background.color2,
+          this.getAttribute("data-background-color-2") ||
+            SETTINGS.background.color2,
         );
         this.outputColor = Ls(
-          this.getAttribute("data-output-color") || ks.output.color,
+          this.getAttribute("data-output-color") || SETTINGS.output.color,
         );
 
         this.currVignetteColor = this.vignetteColor;
@@ -4728,7 +4729,6 @@
       }
 
       initWebgl() {
-        this.resolution = [];
         this.$canvas = this.querySelector("canvas");
         this.$canvas.style.transform = "translateZ(0)";
         this.renderer = new de({ canvas: this.$canvas });
@@ -4814,9 +4814,9 @@
             "                        vec3 clearColor = uOutputColor;\n" +
             "                        vec3 blend = mix(clearColor, texture(tInput, vUv).rgb, texture(tInput, vUv).a);\n" +
             "                        vec3 mixedColor = base * blend;\n" +
-            "                        fragColor.rgb = mix(base, mixedColor, 0.26);\n" +
+            "                        fragColor.rgb = mix(base, mixedColor, 0.6);\n" +
             "                        fragColor.a = 1.;\n" +
-            "                        fragColor.rgb = base * mix(vec3(1.), blend, 0.26);\n" +
+            "                        fragColor.rgb = base * mix(vec3(1.), blend, 0.9) + blend * 0.0001;\n" +
             "                    }\n" +
             "                }\n" +
             "            ",
@@ -5119,7 +5119,7 @@
         this.currentTextureName = "default";
         this.textures = {
           default: ie.fromUrl(this.renderer.gl, this.backgrounsSrc, {
-            useImageBitmap: ks.useImageBitmap,
+            useImageBitmap: SETTINGS.useImageBitmap,
             wrapS: this.renderer.gl.REPEAT,
             wrapT: this.renderer.gl.REPEAT,
             linear: true,
@@ -5132,13 +5132,13 @@
       }
 
       updateViewport() {
-        const width = window.innerWidth * Ps;
-        const height = window.innerHeight * Ps;
+        const width = window.innerWidth * SETTINGS.resolutionScale;
+        const height = window.innerHeight * SETTINGS.resolutionScale;
         ke.set(this.viewport, height, width);
       }
 
       update() {
-        const lerp = this.stopped ? 1 : 0.1;
+        const lerp = this.stopped ? 1 : SETTINGS.motion.pointerLerp;
         this.currVignetteColor[0] +=
           (this.vignetteColor[0] - this.currVignetteColor[0]) * lerp;
         this.currVignetteColor[1] +=
@@ -5175,17 +5175,19 @@
           this.currPointer[0] += (this.pointer[0] - this.currPointer[0]) * lerp;
           this.currPointer[1] += (this.pointer[1] - this.currPointer[1]) * lerp;
         }
+        if (this.stopped || this.forceCenter) {
+          this.currSinePointer[0] = 0.5;
+          this.currSinePointer[1] = 0.5;
+        } else {
+          const waveLerp = SETTINGS.motion.waveLerp;
+          this.currSinePointer[0] +=
+            (this.pointer[0] - this.currSinePointer[0]) * waveLerp;
+          this.currSinePointer[1] +=
+            (this.pointer[1] - this.currSinePointer[1]) * waveLerp;
+        }
 
         if (!this.stopped) this.elapsed += (delta / 1000) * 2;
         this.last = now;
-
-        this.uniforms.uFresnelMethod = ks.fresnelMethod;
-        this.uniforms.uResolution = ks.resolution;
-        this.uniforms.tBNDS = this.blueNoiseTex;
-        this.uniforms.tBlueNoiseResolution = ks.blueNoiseResolution;
-        this.uniforms.frameIndex = this.frameIndex;
-        this.uniforms.uSamplingMethod = ks.samplingMethod;
-        this.uniforms.uBNSamplingMethod = ks.blueNoiseSamplingMethod;
 
         const outColor = this.currOutputColor;
 
@@ -5200,11 +5202,11 @@
         );
         this.backgroundMaterial.setUniform(
           "uBgGradientPos",
-          ks.background.gradientPos,
+          SETTINGS.background.gradientPos,
         );
         this.backgroundMaterial.setUniform(
           "uBgGradientPower",
-          ks.background.gradientPower,
+          SETTINGS.background.gradientPower,
         );
         this.renderer.clearColor(0, 0, 0, 0);
         this.renderer.clear();
@@ -5225,11 +5227,11 @@
         );
         this.backgroundMaterial.setUniform(
           "uBgGradientPos",
-          ks.background.gradientPos,
+          SETTINGS.background.gradientPos,
         );
         this.backgroundMaterial.setUniform(
           "uBgGradientPower",
-          ks.background.gradientPower,
+          SETTINGS.background.gradientPower,
         );
         this.renderer.clearColor(0, 0, 0, 0);
         this.renderer.clear();
@@ -5247,18 +5249,21 @@
           this.textures[this.currentTextureName],
         );
         this.vignetteMaterial.setUniform("tInput", this.blankBuffer);
-        this.vignetteMaterial.setUniform("uResolution", ks.resolution);
-        this.vignetteMaterial.setUniform("uRadius", ks.vignette.radius);
-        this.vignetteMaterial.setUniform("uFalloff", ks.vignette.falloff);
+        this.vignetteMaterial.setUniform("uResolution", this.resolution);
+        this.vignetteMaterial.setUniform("uRadius", SETTINGS.vignette.radius);
+        this.vignetteMaterial.setUniform("uFalloff", SETTINGS.vignette.falloff);
         this.vignetteMaterial.setUniform(
           "uVignetteColor",
           this.currVignetteColor,
         );
         this.vignetteMaterial.setUniform("uColorAlpha", 1);
-        this.vignetteMaterial.setUniform("uDisplace", ks.vignette.displace);
-        this.vignetteMaterial.setUniform("uMix", ks.vignette.mix);
-        this.vignetteMaterial.setUniform("uAngle", ks.vignette.angle);
-        this.vignetteMaterial.setUniform("uSkew", ks.vignette.skew);
+        this.vignetteMaterial.setUniform(
+          "uDisplace",
+          SETTINGS.vignette.displace,
+        );
+        this.vignetteMaterial.setUniform("uMix", SETTINGS.vignette.mix);
+        this.vignetteMaterial.setUniform("uAngle", SETTINGS.vignette.angle);
+        this.vignetteMaterial.setUniform("uSkew", SETTINGS.vignette.skew);
         this.vignetteMaterial.setUniform("uPos", this.currPointer);
         this.vignetteMaterial.setUniform(
           "uClearColor",
@@ -5276,17 +5281,18 @@
 
         this.bufferPlane.material = this.sineMaterial;
         this.sineMaterial.setUniform("tInput", this.bufferRead);
-        this.sineMaterial.setUniform("uResolution", ks.resolution);
+        this.sineMaterial.setUniform("uResolution", this.resolution);
         this.sineMaterial.setUniform("uTime", this.elapsed);
         this.sineMaterial.setUniform("uPos", [0.5, 0.5]);
-        this.sineMaterial.setUniform("uFrequency", ks.sine.frequency);
-        this.sineMaterial.setUniform("uAmplitude", ks.sine.amplitude);
-        this.sineMaterial.setUniform("uFalloff", ks.sine.falloff);
-        this.sineMaterial.setUniform("uRotation", ks.sine.rotation);
-        this.sineMaterial.setUniform("uPhase", ks.sine.phase);
-        this.sineMaterial.setUniform("uSpeed", ks.sine.speed);
-        this.sineMaterial.setUniform("uMixRadius", ks.sine.mixRadius);
-        this.sineMaterial.setUniform("uTrackMouse", ks.sine.trackMouse);
+        this.sineMaterial.setUniform("uFrequency", SETTINGS.sine.frequency);
+        this.sineMaterial.setUniform("uAmplitude", SETTINGS.sine.amplitude);
+        this.sineMaterial.setUniform("uFalloff", SETTINGS.sine.falloff);
+        this.sineMaterial.setUniform("uRotation", SETTINGS.sine.rotation);
+        this.sineMaterial.setUniform("uPhase", SETTINGS.sine.phase);
+        this.sineMaterial.setUniform("uSpeed", SETTINGS.sine.speed);
+        this.sineMaterial.setUniform("uMixRadius", SETTINGS.sine.mixRadius);
+        this.sineMaterial.setUniform("uTrackMouse", SETTINGS.sine.trackMouse);
+        this.sineMaterial.setUniform("uMousePos", this.currSinePointer);
         this.renderer.clearColor(outColor[0], outColor[1], outColor[2], 0);
         this.renderer.clear();
         this.renderer.render(
@@ -5299,30 +5305,33 @@
 
         this.bufferPlane.material = this.shatterMaterial;
         this.shatterMaterial.setUniform("tInput", this.bufferRead);
-        this.shatterMaterial.setUniform("uResolution", ks.resolution);
-        this.shatterMaterial.setUniform("uRadius", ks.shatter.radius);
+        this.shatterMaterial.setUniform("uResolution", this.resolution);
+        this.shatterMaterial.setUniform("uRadius", SETTINGS.shatter.radius);
         {
           const dx = this.currPointer[0] - 0.5;
           const dy = this.currPointer[1] - 0.5;
-          const base = ks.shatter.angle / 360;
+          const base = SETTINGS.shatter.angle / 360;
           const turn = Math.atan2(dy, dx) / (2 * Math.PI);
-          const range = 0.15; // 0.15 turn ~= 54°
+          const range = SETTINGS.motion.shatterRange;
           let target = base + turn * range;
           target = ((target % 1) + 1) % 1;
           let diff = target - this.currShatterAngle;
           if (diff > 0.5) diff -= 1;
           if (diff < -0.5) diff += 1;
-          this.currShatterAngle += diff * 0.05; // smooth
+          this.currShatterAngle += diff * SETTINGS.motion.shatterLerp;
           this.currShatterAngle = ((this.currShatterAngle % 1) + 1) % 1;
           this.shatterMaterial.setUniform("uAngle", this.currShatterAngle);
         }
-        this.shatterMaterial.setUniform("uAmount", ks.shatter.scale);
-        this.shatterMaterial.setUniform("uSpread", ks.shatter.amount);
-        this.shatterMaterial.setUniform("uEasing", ks.shatter.easing);
-        this.shatterMaterial.setUniform("uSkew", ks.shatter.skew);
+        this.shatterMaterial.setUniform("uAmount", SETTINGS.shatter.scale);
+        this.shatterMaterial.setUniform("uSpread", SETTINGS.shatter.amount);
+        this.shatterMaterial.setUniform("uEasing", SETTINGS.shatter.easing);
+        this.shatterMaterial.setUniform("uSkew", SETTINGS.shatter.skew);
         this.shatterMaterial.setUniform("uTime", this.elapsed);
         this.shatterMaterial.setUniform("uPos", [0.5, 0.5]);
-        this.shatterMaterial.setUniform("uMixRadius", ks.shatter.mixRadius);
+        this.shatterMaterial.setUniform(
+          "uMixRadius",
+          SETTINGS.shatter.mixRadius,
+        );
         this.renderer.clearColor(outColor[0], outColor[1], outColor[2], 0);
         this.renderer.clear();
         this.renderer.render(
@@ -5339,24 +5348,36 @@
         this.bokehMaterialFast.setUniform("tBlueNoise", this.blueNoiseTex);
         this.bokehMaterialFast.setUniform(
           "uBlueNoiseResolution",
-          ks.blueNoiseResolution,
+          SETTINGS.blueNoiseResolution,
         );
         this.bokehMaterialFast.setUniform("uResolution", [
-          ks.resolution[0],
-          ks.resolution[1],
+          this.resolution[0],
+          this.resolution[1],
         ]);
-        this.bokehMaterialFast.setUniform("uAmount", ks.bokeh.radius);
-        this.bokehMaterialFast.setUniform("uTilt", ks.bokeh.tilt);
+        this.bokehMaterialFast.setUniform("uAmount", SETTINGS.bokeh.radius);
+        this.bokehMaterialFast.setUniform("uTilt", SETTINGS.bokeh.tilt);
         this.bokehMaterialFast.setUniform("uTime", this.elapsed);
         this.bokehMaterialFast.setUniform("uPos", [0.5, 0.5]);
-        this.bokehMaterialFast.setUniform("uMixRadius", ks.bokeh.mixRadius);
+        this.bokehMaterialFast.setUniform(
+          "uMixRadius",
+          SETTINGS.bokeh.mixRadius,
+        );
         this.bokehMaterialFast.setUniform("uPass", 0);
         {
           const angle =
             Math.atan2(this.currPointer[1] - 0.5, this.currPointer[0] - 0.5) -
             Math.PI / 4;
           const halfTurn = (((angle + Math.PI) % Math.PI) + Math.PI) % Math.PI;
-          this.bokehMaterialFast.setUniform("uRayRotation", halfTurn);
+          let diff = halfTurn - this.currRayRotation;
+          if (diff > Math.PI / 2) diff -= Math.PI;
+          if (diff < -Math.PI / 2) diff += Math.PI;
+          this.currRayRotation += diff * SETTINGS.motion.rayLerp;
+          this.currRayRotation =
+            (((this.currRayRotation + Math.PI) % Math.PI) + Math.PI) % Math.PI;
+          this.bokehMaterialFast.setUniform(
+            "uRayRotation",
+            this.currRayRotation,
+          );
         }
         this.renderer.clearColor(outColor[0], outColor[1], outColor[2], 0);
         this.renderer.clear();
