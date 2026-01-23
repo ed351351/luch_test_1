@@ -4587,7 +4587,7 @@
         waveLerp: -1,
         shatterLerp: 0.005,
         rayLerp: 0.005,
-        shatterRange: 0.15,
+        shatterRange: 0.01,
       },
       background: {
         color: "#fff9b2",
