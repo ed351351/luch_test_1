@@ -4746,10 +4746,20 @@
 
         const updatePointer = (event) => {
           const rect = this.renderer.canvas.getBoundingClientRect();
-          if (!rect.width || !rect.height) return;
           const src = event.touches?.[0] || event.changedTouches?.[0] || event;
-          const x = (src.clientX - rect.left) / rect.width;
-          const y = 1 - (src.clientY - rect.top) / rect.height;
+          const pointerMode = this.getAttribute("data-pointer-mode");
+          const useWindow = pointerMode === "window";
+          let x;
+          let y;
+          if (useWindow || !rect.width || !rect.height) {
+            x = src.clientX / window.innerWidth;
+            y = 1 - src.clientY / window.innerHeight;
+          } else {
+            x = (src.clientX - rect.left) / rect.width;
+            y = 1 - (src.clientY - rect.top) / rect.height;
+          }
+          x = Math.max(0, Math.min(1, x));
+          y = Math.max(0, Math.min(1, y));
           ke.set(this.pointer, x, y);
         };
         window.addEventListener("pointermove", updatePointer, {
